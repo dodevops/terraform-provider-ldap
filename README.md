@@ -1,5 +1,10 @@
 # Terraform LDAP provider
 
+Terraform provider to manage and read entries in an LDAP directory.
+
+Inspired by [elastic-infra/ldap](https://registry.terraform.io/providers/elastic-infra/ldap/latest), but updated to
+Terraform Framework and including ignoring attributes and a data source.
+
 ## Using the provider
 
 Add the following Terraform code to start using the provider:
@@ -29,11 +34,21 @@ To compile the provider, run `go install`. This will build the provider and put 
 
 To generate or update documentation, run `go generate`.
 
-In order to run the full suite of Acceptance tests, first make sure to have a running LDAP server and set the environment
-variables LDAP_URL, LDAP_BIND_DN and LDAP_BIND_PASSWORD accordingly. We've included a docker-compose file to quickly
-start a matching test server.
+In order to run the full suite of Acceptance tests, first make sure to have a running LDAP server. We've included a 
+docker-compose file to quickly start a matching test server.
 
     cd contrib/test-ldap-server
     docker-compose up -d
+
+Then you can set the following environment variables:
+
+- LDAP_NONTLS_URL: The non-TLS enabled URL to the LDAP server
+- LDAP_BIND_DN: The bind DN to access the LDAP server
+- LDAP_BIND_PASSWORD: The bind password to access the LDAP server
+- LDAP_TLS_URL: The TLS enabled URL to access the LDAP server
+
+The URL variables are used to test the non-tls, TLS and STARTTLS features of the provider.
+
+If you use the provided test server, the variables are already set for you.
 
 Afterwards run `make testacc`.

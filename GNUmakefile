@@ -1,6 +1,13 @@
 default: testacc
 
+LDAP_NONTLS_URL ?= ldap://localhost:389
+LDAP_TLS_URL ?= ldaps://localhost:636
+LDAP_BIND_DN ?= cn=admin,dc=example,dc=com
+LDAP_BIND_PASSWORD ?= admin
+
 # Run acceptance tests
 .PHONY: testacc
 testacc:
-	TF_ACC=1 go test ./... -v $(TESTARGS) -timeout 120m
+	TF_ACC=1 LDAP_URL=$(LDAP_NONTLS_URL) LDAP_BIND_DN=$(LDAP_BIND_DN) LDAP_BIND_PASSWORD=$(LDAP_BIND_PASSWORD) go test ./... -v $(TESTARGS) -timeout 120m
+	TF_ACC=1 LDAP_URL=$(LDAP_TLS_URL) LDAP_BIND_DN=$(LDAP_BIND_DN) LDAP_BIND_PASSWORD=$(LDAP_BIND_PASSWORD) LDAP_TLS_INSECURE_VERIFY=true go test ./... -v $(TESTARGS) -timeout 120m
+	TF_ACC=1 LDAP_URL=$(LDAP_NONTLS_URL) LDAP_BIND_DN=$(LDAP_BIND_DN) LDAP_BIND_PASSWORD=$(LDAP_BIND_PASSWORD) LDAP_TLS_INSECURE_VERIFY=true LDAP_TLS_USE_STARTTLS=true go test ./... -v $(TESTARGS) -timeout 120m

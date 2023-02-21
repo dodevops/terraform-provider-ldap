@@ -6,6 +6,7 @@ description: |-
   Terraform provider to manage and read entries in an LDAP directory.
   Inspired by elastic-infra/ldap https://registry.terraform.io/providers/elastic-infra/ldap/latest, but updated to
   Terraform Framework and including ignoring attributes and a data source.
+  All provider options can be set by the respective environment variables as well.
 ---
 
 # ldap Provider
@@ -14,6 +15,8 @@ Terraform provider to manage and read entries in an LDAP directory.
 
 Inspired by [elastic-infra/ldap](https://registry.terraform.io/providers/elastic-infra/ldap/latest), but updated to
 Terraform Framework and including ignoring attributes and a data source.
+
+All provider options can be set by the respective environment variables as well.
 
 ## Example Usage
 
@@ -30,6 +33,8 @@ provider "ldap" {
 
 ### Optional
 
-- `ldap_bind_dn` (String) Bind DN used to manage directory (can be managed using the environment variable LDAP_BIND_DN)
-- `ldap_bind_password` (String) Bind password  (can be managed using the environment variable LDAP_BIND_PASSWORD)
-- `ldap_url` (String) LDAP URL to managed server (can be managed using the environment variable LDAP_URL)
+- `ldap_bind_dn` (String) Bind DN used to manage directory (`LDAP_BIND_DN`)
+- `ldap_bind_password` (String) Bind password (`LDAP_BIND_PASSWORD`)
+- `ldap_tls_insecure_verify` (Boolean) Whether to skip certificate verification (`LDAP_TLS_INSECURE_VERIFY`)
+- `ldap_tls_use_starttls` (Boolean) Whether to connect using STARTTLS (`LDAP_TLS_USE_STARTTLS`)
+- `ldap_url` (String) LDAP URL to managed server (`LDAP_URL`)

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
@@ -10,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"os"
+	"strings"
 )
 
 // Ensure LDAPProvider satisfies various provider interfaces.
@@ -25,34 +27,46 @@ type LDAPProvider struct {
 
 // LDAPProviderModel describes the provider data model.
 type LDAPProviderModel struct {
-	LDAPURL          types.String `tfsdk:"ldap_url"`
-	LDAPBindDN       types.String `tfsdk:"ldap_bind_dn"`
-	LDAPBindPassword types.String `tfsdk:"ldap_bind_password"`
+	LDAPURL               types.String `tfsdk:"ldap_url"`
+	LDAPBindDN            types.String `tfsdk:"ldap_bind_dn"`
+	LDAPBindPassword      types.String `tfsdk:"ldap_bind_password"`
+	LDAPTLSInsecureVerify types.Bool   `tfsdk:"ldap_tls_insecure_verify"`
+	LDAPTLSUseStartTLS    types.Bool   `tfsdk:"ldap_tls_use_starttls"`
 }
 
-func (p *LDAPProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
+func (p *LDAPProvider) Metadata(_ context.Context, _ provider.MetadataRequest, resp *provider.MetadataResponse) {
 	resp.TypeName = "ldap"
 	resp.Version = p.version
 }
 
-func (p *LDAPProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
+func (p *LDAPProvider) Schema(_ context.Context, _ provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
 		MarkdownDescription: `Terraform provider to manage and read entries in an LDAP directory.
 
 Inspired by [elastic-infra/ldap](https://registry.terraform.io/providers/elastic-infra/ldap/latest), but updated to
 Terraform Framework and including ignoring attributes and a data source.
+
+All provider options can be set by the respective environment variables as well.
 `,
 		Attributes: map[string]schema.Attribute{
 			"ldap_url": schema.StringAttribute{
-				MarkdownDescription: "LDAP URL to managed server (can be managed using the environment variable LDAP_URL)",
+				MarkdownDescription: "LDAP URL to managed server (`LDAP_URL`)",
 				Optional:            true,
 			},
 			"ldap_bind_dn": schema.StringAttribute{
-				MarkdownDescription: "Bind DN used to manage directory (can be managed using the environment variable LDAP_BIND_DN)",
+				MarkdownDescription: "Bind DN used to manage directory (`LDAP_BIND_DN`)",
 				Optional:            true,
 			},
 			"ldap_bind_password": schema.StringAttribute{
-				MarkdownDescription: "Bind password  (can be managed using the environment variable LDAP_BIND_PASSWORD)",
+				MarkdownDescription: "Bind password (`LDAP_BIND_PASSWORD`)",
+				Optional:            true,
+			},
+			"ldap_tls_insecure_verify": schema.BoolAttribute{
+				MarkdownDescription: "Whether to skip certificate verification (`LDAP_TLS_INSECURE_VERIFY`)",
+				Optional:            true,
+			},
+			"ldap_tls_use_starttls": schema.BoolAttribute{
+				MarkdownDescription: "Whether to connect using STARTTLS (`LDAP_TLS_USE_STARTTLS`)",
 				Optional:            true,
 			},
 		},
@@ -63,6 +77,15 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	ldapUrl := os.Getenv("LDAP_URL")
 	ldapBindDN := os.Getenv("LDAP_BIND_DN")
 	ldapBindPassword := os.Getenv("LDAP_BIND_PASSWORD")
+	ldapTLSInsecureVerify := false
+	if v := os.Getenv("LDAP_TLS_INSECURE_VERIFY"); v != "" {
+		ldapTLSInsecureVerify = strings.ToUpper(v) == "TRUE"
+	}
+
+	ldapTLSUseStartTLS := false
+	if v := os.Getenv("LDAP_TLS_USE_STARTTLS"); v != "" {
+		ldapTLSUseStartTLS = strings.ToUpper(v) == "TRUE"
+	}
 
 	var data LDAPProviderModel
 	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
@@ -80,6 +103,14 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	if data.LDAPBindPassword.ValueString() != "" {
 		ldapBindPassword = data.LDAPBindPassword.ValueString()
+	}
+
+	if !data.LDAPTLSInsecureVerify.IsNull() {
+		ldapTLSInsecureVerify = data.LDAPTLSInsecureVerify.ValueBool()
+	}
+
+	if !data.LDAPTLSUseStartTLS.IsNull() {
+		ldapTLSUseStartTLS = data.LDAPTLSUseStartTLS.ValueBool()
 	}
 
 	if ldapUrl == "" {
@@ -106,31 +137,51 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	if conn, err := ldap.DialURL(ldapUrl); err != nil {
+	var o []ldap.DialOpt
+
+	if ldapTLSInsecureVerify {
+		o = append(o, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true}))
+	}
+
+	if conn, err := ldap.DialURL(ldapUrl, o...); err != nil {
 		resp.Diagnostics.AddError(
 			"Can't connect to LDAP server",
 			fmt.Sprintf("Error connecting to LDAP server: %s", err),
 		)
 		return
 	} else {
+		if ldapTLSUseStartTLS {
+			c := tls.Config{}
+			if ldapTLSInsecureVerify {
+				c.InsecureSkipVerify = true
+			}
+			if err := conn.StartTLS(&c); err != nil {
+				resp.Diagnostics.AddError(
+					"Can't start TLS",
+					fmt.Sprintf("Error starting TLS: %s", err),
+				)
+				return
+			}
+		}
 		if err := conn.Bind(ldapBindDN, ldapBindPassword); err != nil {
 			resp.Diagnostics.AddError(
 				"Can't bind to LDAP server",
 				fmt.Sprintf("Error binding to LDAP server: %s", err),
 			)
+			return
 		}
 		resp.DataSourceData = conn
 		resp.ResourceData = conn
 	}
 }
 
-func (p *LDAPProvider) Resources(ctx context.Context) []func() resource.Resource {
+func (p *LDAPProvider) Resources(_ context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewLDAPObjectResource,
 	}
 }
 
-func (p *LDAPProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
+func (p *LDAPProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewLDAPObjectDataSource,
 	}
