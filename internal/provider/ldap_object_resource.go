@@ -103,6 +103,7 @@ func (L *LDAPObjectResource) Create(ctx context.Context, request resource.Create
 			"Can not add resource",
 			fmt.Sprintf("LDAP server reported: %s", err),
 		)
+		return
 	}
 	data.ID = data.DN
 	response.Diagnostics.Append(response.State.Set(ctx, &data)...)
@@ -156,6 +157,7 @@ func (L *LDAPObjectResource) Update(ctx context.Context, request resource.Update
 				"Can not add resource",
 				fmt.Sprintf("LDAP server reported: %s", err),
 			)
+			return
 		}
 	} else {
 		var stateAttributes map[string][]string
@@ -199,6 +201,7 @@ func (L *LDAPObjectResource) Update(ctx context.Context, request resource.Update
 				"Can not modify entry",
 				fmt.Sprintf("LDAP server reported: %s", err),
 			)
+			return
 		}
 	}
 	planData.ID = planData.DN
