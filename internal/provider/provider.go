@@ -85,7 +85,7 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	if ldapUrl == "" {
 		resp.Diagnostics.AddError(
 			"No LDAP url specified",
-			fmt.Sprintf("Configure the ldap_url attribute or LDAP_URL environment variable for the provider"),
+			"Configure the ldap_url attribute or LDAP_URL environment variable for the provider",
 		)
 		return
 	}
@@ -93,7 +93,7 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	if ldapBindDN == "" {
 		resp.Diagnostics.AddError(
 			"No LDAP bind dn specified",
-			fmt.Sprintf("Configure the ldap_bind_dn attribute or LDAP_BIND_DN environment variable for the provider"),
+			"Configure the ldap_bind_dn attribute or LDAP_BIND_DN environment variable for the provider",
 		)
 		return
 	}
@@ -101,7 +101,7 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	if ldapBindPassword == "" {
 		resp.Diagnostics.AddError(
 			"No LDAP bind password specified",
-			fmt.Sprintf("Configure the ldap_bind_password attribute or LDAP_BIND_PASSWORD environment variable for the provider"),
+			"Configure the ldap_bind_password attribute or LDAP_BIND_PASSWORD environment variable for the provider",
 		)
 		return
 	}

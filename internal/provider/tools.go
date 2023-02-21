@@ -1,7 +1,6 @@
 package provider
 
 import (
-	"errors"
 	"fmt"
 	"github.com/go-ldap/ldap/v3"
 )
@@ -13,7 +12,7 @@ func GetEntry(conn *ldap.Conn, dn string) (ldap.Entry, error) {
 		return ldap.Entry{}, err
 	} else {
 		if len(result.Entries) != 1 {
-			return ldap.Entry{}, errors.New(fmt.Sprintf("Search returned %d results", len(result.Entries)))
+			return ldap.Entry{}, fmt.Errorf("search returned %d results", len(result.Entries))
 		}
 		return *result.Entries[0], nil
 	}
