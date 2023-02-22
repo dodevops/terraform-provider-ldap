@@ -253,6 +253,14 @@ func (L *LDAPObjectResource) ModifyPlan(ctx context.Context, request resource.Mo
 		// don't ignore any attributes on create and delete
 		return
 	}
+
+	if stateData != nil && planData != nil && stateData.DN != planData.DN {
+		response.Diagnostics.Append(response.Plan.SetAttribute(ctx, path.Root("id"), types.StringUnknown())...)
+		if response.Diagnostics.HasError() {
+			return
+		}
+	}
+
 	var planAttributes map[string][]string
 	response.Diagnostics.Append(planData.Attributes.ElementsAs(ctx, &planAttributes, false)...)
 	var stateAttributes map[string][]string
