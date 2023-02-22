@@ -12,7 +12,7 @@ func TestLDAPObjectResource(t *testing.T) {
 		PreCheck:                 func() { testAccPreCheck(t) },
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
-			// Create and Read testing
+			// Create test
 			{
 				Config: testCreateConfig,
 				Check: resource.ComposeAggregateTestCheckFunc(
@@ -22,18 +22,21 @@ func TestLDAPObjectResource(t *testing.T) {
 					resource.TestCheckResourceAttr("ldap_object.test", "attributes.userPassword.0", "password"),
 				),
 			},
+			// Update test
 			{
 				Config: testUpdateConfig,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("ldap_object.test", "attributes.sn.0", "test2"),
 				),
 			},
+			// Update an ignored attribute
 			{
 				Config: testUpdateIgnoreConfig,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("ldap_object.test", "attributes.userPassword.0", "password"),
 				),
 			},
+			// Update an ignored attribute which was changed externally
 			{
 				Config:    testUpdateIgnoreConfig,
 				PreConfig: testChangePasswordExternally,
@@ -41,6 +44,25 @@ func TestLDAPObjectResource(t *testing.T) {
 					resource.TestCheckResourceAttr("ldap_object.test", "attributes.userPassword.0", "password"),
 				),
 			},
+			{
+				Config:        testImport,
+				PreConfig:     testImportPreConfig,
+				ImportState:   true,
+				ImportStateId: "cn=importtest,dc=example,dc=com",
+				ResourceName:  "ldap_object.importtest",
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ldap_object.importtest", "attributes.sn.0", "test"),
+				),
+			},
+			// Update DN
+			{
+				Config:    testUpdateDN,
+				PreConfig: testChangePasswordExternally,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ldap_object.test", "dn", "cn=test2,dc=example,dc=com"),
+				),
+			},
+			// Test import
 			{
 				Config:        testImport,
 				PreConfig:     testImportPreConfig,
@@ -108,6 +130,19 @@ resource "ldap_object" "test" {
 		"cn" = ["test"]
 		"sn" = ["test2"]
 		"userPassword" = ["password2"]
+	}
+	ignore_changes = ["userPassword"]
+}
+`
+
+const testUpdateDN = `
+resource "ldap_object" "test" {
+	dn = "cn=test2,dc=example,dc=com"
+	object_classes = ["person"]
+	attributes = {
+		"cn" = ["test2"]
+		"sn" = ["test2"]
+		"userPassword" = ["password"]
 	}
 	ignore_changes = ["userPassword"]
 }
