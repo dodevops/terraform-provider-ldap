@@ -41,6 +41,16 @@ func TestLDAPObjectResource(t *testing.T) {
 					resource.TestCheckResourceAttr("ldap_object.test", "attributes.userPassword.0", "password"),
 				),
 			},
+			{
+				Config:        testImport,
+				PreConfig:     testImportPreConfig,
+				ImportState:   true,
+				ImportStateId: "cn=importtest,dc=example,dc=com",
+				ResourceName:  "ldap_object.importtest",
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ldap_object.importtest", "attributes.sn.0", "test"),
+				),
+			},
 		}},
 	)
 }
@@ -102,3 +112,28 @@ resource "ldap_object" "test" {
 	ignore_changes = ["userPassword"]
 }
 `
+
+const testImport = `
+resource "ldap_object" "importtest" {
+}
+`
+
+func testImportPreConfig() {
+	ldapUrl := os.Getenv("LDAP_URL")
+	ldapBindDN := os.Getenv("LDAP_BIND_DN")
+	ldapBindPassword := os.Getenv("LDAP_BIND_PASSWORD")
+
+	if conn, err := ldap.DialURL(ldapUrl); err != nil {
+		return
+	} else {
+		if err := conn.Bind(ldapBindDN, ldapBindPassword); err != nil {
+			return
+		}
+		r := ldap.NewAddRequest("cn=importtest,dc=example,dc=com", []ldap.Control{})
+		r.Attribute("objectClass", []string{"person"})
+		r.Attribute("sn", []string{"test"})
+		if err := conn.Add(r); err != nil {
+			return
+		}
+	}
+}
