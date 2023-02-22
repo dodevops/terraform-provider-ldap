@@ -225,22 +225,14 @@ func (L *LDAPObjectResource) Delete(ctx context.Context, request resource.Delete
 }
 
 func (L *LDAPObjectResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
-	data := LDAPObjectResourceModel{
-		DN: types.StringValue(request.ID),
-	}
-	var attributes map[string][]string
-	response.Diagnostics.Append(data.Attributes.ElementsAs(ctx, &attributes, false)...)
-	if response.Diagnostics.HasError() {
-		return
-	}
-
-	if entry, err := GetEntry(L.conn, data.DN.ValueString()); err != nil {
+	if entry, err := GetEntry(L.conn, request.ID); err != nil {
 		response.Diagnostics.AddError(
 			"Can not read entry",
 			err.Error(),
 		)
 	} else {
 		response.State.SetAttribute(ctx, path.Root("dn"), entry.DN)
+		response.State.SetAttribute(ctx, path.Root("id"), entry.DN)
 		for _, attribute := range entry.Attributes {
 			if attribute.Name == "objectClass" {
 				response.State.SetAttribute(ctx, path.Root("object_classes"), attribute.Values)
