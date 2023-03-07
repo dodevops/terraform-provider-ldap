@@ -5,8 +5,8 @@ import (
 	"github.com/go-ldap/ldap/v3"
 )
 
-func GetEntry(conn *ldap.Conn, dn string) (ldap.Entry, error) {
-	s := ldap.NewSearchRequest(dn, ldap.ScopeBaseObject, 0, 0, 0, false, "(&)", []string{}, []ldap.Control{})
+func GetEntry(conn *ldap.Conn, dn string, attrs ...string) (ldap.Entry, error) {
+	s := ldap.NewSearchRequest(dn, ldap.ScopeBaseObject, 0, 0, 0, false, "(&)", attrs, []ldap.Control{})
 
 	if result, err := conn.Search(s); err != nil {
 		return ldap.Entry{}, err
