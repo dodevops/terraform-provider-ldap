@@ -22,10 +22,11 @@ type LDAPObjectDataSource struct {
 }
 
 type LDAPObjectDatasourceModel struct {
-	Id            types.String `tfsdk:"id"`
-	DN            types.String `tfsdk:"dn"`
-	ObjectClasses types.List   `tfsdk:"object_classes"`
-	Attributes    types.Map    `tfsdk:"attributes"`
+	Id                   types.String `tfsdk:"id"`
+	DN                   types.String `tfsdk:"dn"`
+	ObjectClasses        types.List   `tfsdk:"object_classes"`
+	Attributes           types.Map    `tfsdk:"attributes"`
+	AdditionalAttributes types.Set    `tfsdk:"additional_attributes"`
 }
 
 func (L *LDAPObjectDataSource) Metadata(_ context.Context, request datasource.MetadataRequest, response *datasource.MetadataResponse) {
@@ -43,6 +44,11 @@ func (L *LDAPObjectDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 			"dn": schema.StringAttribute{
 				MarkdownDescription: "DN of this ldap object",
 				Required:            true,
+			},
+			"additional_attributes": schema.SetAttribute{
+				MarkdownDescription: "Any additional attributes to request, such as constructed attributes",
+				Optional:            true,
+				ElementType:         types.StringType,
 			},
 			"object_classes": schema.ListAttribute{
 				MarkdownDescription: "A list of classes this object implements",
@@ -91,7 +97,10 @@ func (L *LDAPObjectDataSource) Read(ctx context.Context, request datasource.Read
 	response.State.SetAttribute(ctx, path.Root("id"), data.DN)
 	response.State.SetAttribute(ctx, path.Root("dn"), data.DN)
 
-	if entry, err := GetEntry(L.conn, data.DN.ValueString()); err != nil {
+	var additionalAttributes []string
+	response.Diagnostics.Append(data.AdditionalAttributes.ElementsAs(ctx, &additionalAttributes, false)...)
+
+	if entry, err := GetEntry(L.conn, data.DN.ValueString(), append(additionalAttributes, "*")...); err != nil {
 		response.Diagnostics.AddError(
 			"Can not read entry",
 			err.Error(),
