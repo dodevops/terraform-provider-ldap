@@ -1,7 +1,7 @@
 default: testacc
 
-LDAP_NONTLS_URL ?= ldap://localhost:389
-LDAP_TLS_URL ?= ldaps://localhost:636
+LDAP_NONTLS_URL ?= ldap://localhost:1389
+LDAP_TLS_URL ?= ldaps://localhost:1636
 LDAP_BIND_DN ?= cn=admin,dc=example,dc=com
 LDAP_BIND_PASSWORD ?= admin
 
