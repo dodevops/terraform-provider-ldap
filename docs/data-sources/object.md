@@ -25,6 +25,10 @@ data "ldap_object" "example" {
 
 - `dn` (String) DN of this ldap object
 
+### Optional
+
+- `additional_attributes` (Set of String) Any additional attributes to request, such as constructed attributes
+
 ### Read-Only
 
 - `attributes` (Map of List of String) The definition of an attribute, the name defines the type of the attribetu

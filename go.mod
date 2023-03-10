@@ -1,4 +1,4 @@
-module github.com/hashicorp/terraform-provider-scaffolding-framework
+module github.com/dodevops/terraform-provider-ldap
 
 go 1.18
 
