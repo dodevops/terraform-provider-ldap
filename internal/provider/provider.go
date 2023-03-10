@@ -184,6 +184,7 @@ func (p *LDAPProvider) Resources(_ context.Context) []func() resource.Resource {
 func (p *LDAPProvider) DataSources(_ context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		NewLDAPObjectDataSource,
+		NewLDAPSearchDataSource,
 	}
 }
 
