@@ -28,4 +28,5 @@ func TestLDAPObjectDatasource(t *testing.T) {
 const testDataSource = `
 data "ldap_object" "test" {
 	dn = "dc=example,dc=com"
+	additional_attributes = ["creatorsName"]
 }`
