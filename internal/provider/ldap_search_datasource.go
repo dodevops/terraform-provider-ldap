@@ -122,7 +122,7 @@ func (L *LDAPSearchDataSource) Read(ctx context.Context, request datasource.Read
 		filter = data.Filter.ValueString()
 	}
 
-	response.State.SetAttribute(ctx, path.Root("id"), filter) // TODO
+	response.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf("%s/%s/%s", data.BaseDN.ValueString(), data.Scope.ValueString(), filter))
 
 	s := ldap.NewSearchRequest(data.BaseDN.ValueString(), scope, 0, 0, 0, false, filter, append(additionalAttributes, "*"), []ldap.Control{})
 
