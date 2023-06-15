@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      LDAP_URL: ldap://localhost:389
+      LDAP_URL: ldap://localhost:1389
       LDAP_BIND_DN: cn=admin,dc=example,dc=com
       LDAP_BIND_PASSWORD: admin
     strategy:
