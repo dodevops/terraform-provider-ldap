@@ -34,5 +34,3 @@ data "ldap_object" "example" {
 - `attributes` (Map of List of String) The definition of an attribute, the name defines the type of the attribetu
 - `id` (String) Datasource identifier
 - `object_classes` (List of String) A list of classes this object implements
-
-
