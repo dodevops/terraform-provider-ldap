@@ -41,5 +41,3 @@ resource "ldap_object" "example" {
 ### Read-Only
 
 - `id` (String) Resource identifier
-
-
