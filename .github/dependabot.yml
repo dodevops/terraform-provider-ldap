@@ -6,7 +6,11 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    # We only want security updates
+    open-pull-requests-limit: 0  
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "daily"
+    # We only want security updates
+    open-pull-requests-limit: 0
