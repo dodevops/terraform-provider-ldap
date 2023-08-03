@@ -56,7 +56,7 @@ func (L *LDAPObjectDataSource) Schema(_ context.Context, _ datasource.SchemaRequ
 				Computed:            true,
 			},
 			"attributes": schema.MapAttribute{
-				MarkdownDescription: "The definition of an attribute, the name defines the type of the attribetu",
+				MarkdownDescription: "The definition of an attribute, the name defines the type of the attribute",
 				Computed:            true,
 				ElementType:         types.ListType{ElemType: types.StringType},
 			},

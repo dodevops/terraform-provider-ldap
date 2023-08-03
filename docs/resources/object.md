@@ -35,7 +35,7 @@ resource "ldap_object" "example" {
 
 ### Optional
 
-- `attributes` (Map of List of String) The definition of an attribute, the name defines the type of the attribetu
+- `attributes` (Map of List of String) The definition of an attribute, the name defines the type of the attribute
 - `ignore_changes` (List of String) A list of types for which changes are ignored
 
 ### Read-Only
