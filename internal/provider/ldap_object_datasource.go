@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 var _ datasource.DataSource = &LDAPObjectDataSource{}
@@ -107,6 +108,7 @@ func (L *LDAPObjectDataSource) Read(ctx context.Context, request datasource.Read
 		)
 	} else {
 		response.State.SetAttribute(ctx, path.Root("dn"), entry.DN)
+		ctx = MaskAttributesFromArray(ctx, entry.Attributes)
 		for _, attribute := range entry.Attributes {
 			if attribute.Name == "objectClass" {
 				response.State.SetAttribute(ctx, path.Root("object_classes"), attribute.Values)
@@ -114,5 +116,8 @@ func (L *LDAPObjectDataSource) Read(ctx context.Context, request datasource.Read
 				response.State.SetAttribute(ctx, path.Root("attributes").AtMapKey(attribute.Name), attribute.Values)
 			}
 		}
+		tflog.Debug(ctx, "Read entry", map[string]interface{}{
+			"entry": ToLDIF(entry),
+		})
 	}
 }

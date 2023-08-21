@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 var _ datasource.DataSource = &LDAPSearchDataSource{}
@@ -124,6 +125,13 @@ func (L *LDAPSearchDataSource) Read(ctx context.Context, request datasource.Read
 
 	response.State.SetAttribute(ctx, path.Root("id"), fmt.Sprintf("%s/%s/%s", data.BaseDN.ValueString(), data.Scope.ValueString(), filter))
 
+	tflog.Debug(ctx, "Searching for ldap entries", map[string]interface{}{
+		"baseDN":               data.BaseDN.ValueString(),
+		"scope":                scope,
+		"filter":               filter,
+		"additionalAttributes": additionalAttributes,
+	})
+
 	s := ldap.NewSearchRequest(data.BaseDN.ValueString(), scope, 0, 0, 0, false, filter, append(additionalAttributes, "*"), []ldap.Control{})
 
 	if result, err := L.conn.Search(s); err != nil {
@@ -133,6 +141,10 @@ func (L *LDAPSearchDataSource) Read(ctx context.Context, request datasource.Read
 		)
 	} else {
 		for i, entry := range result.Entries {
+			ctx := MaskAttributesFromArray(ctx, entry.Attributes)
+			tflog.Debug(ctx, "Found entry", map[string]interface{}{
+				"entry": ToLDIF(entry),
+			})
 			for _, attribute := range entry.Attributes {
 				response.Diagnostics.Append(response.State.SetAttribute(ctx, path.Root("results").AtListIndex(i).AtMapKey(attribute.Name), attribute.Values)...)
 			}
