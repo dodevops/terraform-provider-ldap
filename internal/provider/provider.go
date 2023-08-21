@@ -10,6 +10,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"log"
 	"os"
 	"strings"
 )
@@ -74,6 +76,7 @@ All provider options can be set by the respective environment variables as well.
 }
 
 func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	tflog.Debug(ctx, "Checking configuration")
 	ldapUrl := os.Getenv("LDAP_URL")
 	ldapBindDN := os.Getenv("LDAP_BIND_DN")
 	ldapBindPassword := os.Getenv("LDAP_BIND_PASSWORD")
@@ -137,12 +140,19 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
+	ctx = tflog.MaskLogStrings(ctx, ldapBindPassword)
+	loggerAdapter := TFLoggerAdapter{ctx: ctx}
+	logger := log.New(loggerAdapter, "", log.LstdFlags)
+	ldap.Logger(logger)
+
 	var o []ldap.DialOpt
 
 	if ldapTLSInsecureVerify {
+		tflog.Debug(ctx, "Connecting insecurely to the LDAP server")
 		o = append(o, ldap.DialWithTLSConfig(&tls.Config{InsecureSkipVerify: true}))
 	}
 
+	tflog.Debug(ctx, "Connecting to LDAP server", map[string]interface{}{"url": ldapUrl})
 	if conn, err := ldap.DialURL(ldapUrl, o...); err != nil {
 		resp.Diagnostics.AddError(
 			"Can't connect to LDAP server",
@@ -150,7 +160,9 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		)
 		return
 	} else {
+		conn.Debug = true
 		if ldapTLSUseStartTLS {
+			tflog.Debug(ctx, "Connecting using StartTLS")
 			c := tls.Config{}
 			if ldapTLSInsecureVerify {
 				c.InsecureSkipVerify = true
@@ -163,6 +175,7 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 				return
 			}
 		}
+		tflog.Debug(ctx, "Binding to LDAP server", map[string]interface{}{"bindDN": ldapBindDN, "password": ldapBindPassword})
 		if err := conn.Bind(ldapBindDN, ldapBindPassword); err != nil {
 			resp.Diagnostics.AddError(
 				"Can't bind to LDAP server",

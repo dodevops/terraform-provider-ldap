@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/thoas/go-funk"
 )
 
@@ -116,6 +117,7 @@ func (L *LDAPObjectResource) Read(ctx context.Context, request resource.ReadRequ
 		return
 	}
 
+	tflog.Debug(ctx, "Reading entry", map[string]interface{}{"dn": data.DN.ValueString()})
 	if entry, err := GetEntry(L.conn, data.DN.ValueString()); err != nil {
 		response.Diagnostics.AddError(
 			"Can not read entry",
@@ -123,6 +125,7 @@ func (L *LDAPObjectResource) Read(ctx context.Context, request resource.ReadRequ
 		)
 	} else {
 		response.State.SetAttribute(ctx, path.Root("dn"), entry.DN)
+		ctx = MaskAttributesFromArray(ctx, entry.Attributes)
 		for _, attribute := range entry.Attributes {
 			if attribute.Name == "objectClass" {
 				response.State.SetAttribute(ctx, path.Root("object_classes"), attribute.Values)
@@ -130,13 +133,14 @@ func (L *LDAPObjectResource) Read(ctx context.Context, request resource.ReadRequ
 				response.State.SetAttribute(ctx, path.Root("attributes").AtMapKey(attribute.Name), attribute.Values)
 			}
 		}
+
+		tflog.Debug(ctx, "Read entry", map[string]interface{}{"entry": ToLDIF(entry)})
 	}
 }
 
 func (L *LDAPObjectResource) Update(ctx context.Context, request resource.UpdateRequest, response *resource.UpdateResponse) {
 	var stateData *LDAPObjectResourceModel
 	var planData *LDAPObjectResourceModel
-
 	response.Diagnostics.Append(request.State.Get(ctx, &stateData)...)
 	response.Diagnostics.Append(request.Plan.Get(ctx, &planData)...)
 	if response.Diagnostics.HasError() {
@@ -145,6 +149,11 @@ func (L *LDAPObjectResource) Update(ctx context.Context, request resource.Update
 
 	// Recreate object if DN changed
 	if stateData.DN.ValueString() != planData.DN.ValueString() {
+		tflog.Warn(ctx, "Recreating entry because the DN changed", map[string]interface{}{
+			"oldDn": stateData.DN.ValueString(),
+			"dn":    planData.DN.ValueString(),
+		})
+
 		if err := L.conn.Del(ldap.NewDelRequest(stateData.DN.ValueString(), []ldap.Control{})); err != nil {
 			response.Diagnostics.AddError(
 				"Can not delete old DN entry",
@@ -166,24 +175,35 @@ func (L *LDAPObjectResource) Update(ctx context.Context, request resource.Update
 		response.Diagnostics.Append(planData.Attributes.ElementsAs(ctx, &planAttributes, false)...)
 		r := ldap.NewModifyRequest(planData.DN.ValueString(), []ldap.Control{})
 
+		ctx = MaskAttributes(ctx, stateAttributes)
 		for attributeType, stateValues := range stateAttributes {
 			if L.isIgnored(ctx, attributeType, stateData, response.Diagnostics) {
 				continue
 			}
 			// state attribute is in the plan, compare the values
 			if planValues, exists := planAttributes[attributeType]; exists {
+				valuesChanged := false
 				for _, stateValue := range stateValues {
 					if !funk.ContainsString(planValues, stateValue) {
-						r.Delete(attributeType, []string{stateValue})
+						valuesChanged = true
 					}
 				}
 				for _, planValue := range planValues {
 					if !funk.ContainsString(stateValues, planValue) {
-						r.Add(attributeType, []string{planValue})
+						valuesChanged = true
 					}
 				}
+				if valuesChanged {
+					tflog.Debug(ctx, "Changing attribute", map[string]interface{}{
+						"type":   attributeType,
+						"values": planValues,
+					})
+					r.Replace(attributeType, planValues)
+				}
 			} else {
-				// state attribute is not in the plan, delete it
+				tflog.Debug(ctx, "Removing attribute", map[string]interface{}{
+					"type": attributeType,
+				})
 				r.Delete(attributeType, []string{})
 			}
 		}
@@ -191,8 +211,10 @@ func (L *LDAPObjectResource) Update(ctx context.Context, request resource.Update
 			if L.isIgnored(ctx, attributeType, planData, response.Diagnostics) {
 				continue
 			}
-			// plan value is not in the state, add it
 			if _, exists := stateAttributes[attributeType]; !exists {
+				tflog.Debug(ctx, "Adding attribute", map[string]interface{}{
+					"type": attributeType,
+				})
 				r.Add(attributeType, values)
 			}
 		}
@@ -215,6 +237,7 @@ func (L *LDAPObjectResource) Delete(ctx context.Context, request resource.Delete
 		return
 	}
 
+	tflog.Debug(ctx, "Deleting entry", map[string]interface{}{"dn": stateData.DN.ValueString()})
 	if err := L.conn.Del(ldap.NewDelRequest(stateData.DN.ValueString(), []ldap.Control{})); err != nil {
 		response.Diagnostics.AddError(
 			"Can not delete entry",
@@ -225,12 +248,14 @@ func (L *LDAPObjectResource) Delete(ctx context.Context, request resource.Delete
 }
 
 func (L *LDAPObjectResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
+	tflog.Info(ctx, "Importing entry", map[string]interface{}{"dn": request.ID})
 	if entry, err := GetEntry(L.conn, request.ID); err != nil {
 		response.Diagnostics.AddError(
 			"Can not read entry",
 			err.Error(),
 		)
 	} else {
+		ctx = MaskAttributesFromArray(ctx, entry.Attributes)
 		response.State.SetAttribute(ctx, path.Root("dn"), entry.DN)
 		response.State.SetAttribute(ctx, path.Root("id"), entry.DN)
 		for _, attribute := range entry.Attributes {
@@ -240,6 +265,9 @@ func (L *LDAPObjectResource) ImportState(ctx context.Context, request resource.I
 				response.State.SetAttribute(ctx, path.Root("attributes").AtMapKey(attribute.Name), attribute.Values)
 			}
 		}
+		tflog.Debug(ctx, "Imported entry", map[string]interface{}{
+			"entry": ToLDIF(entry),
+		})
 	}
 }
 
@@ -289,12 +317,23 @@ func (L *LDAPObjectResource) addLdapEntry(ctx context.Context, data *LDAPObjectR
 		return errors.New("error converting data")
 	}
 
+	tflog.Info(ctx, "Adding new item", map[string]interface{}{
+		"dn":          data.DN.ValueString(),
+		"objectClass": objectClasses,
+		"attributes":  attributes,
+	})
 	a := ldap.NewAddRequest(data.DN.ValueString(), []ldap.Control{})
 	a.Attribute("objectClass", objectClasses)
+
+	ctx = MaskAttributes(ctx, attributes)
 
 	for attributeType, values := range attributes {
 		a.Attribute(attributeType, values)
 	}
+
+	tflog.Debug(ctx, "Adding LDAP entry", map[string]interface{}{
+		"entry": ToLDIF(a),
+	})
 
 	return L.conn.Add(a)
 }
