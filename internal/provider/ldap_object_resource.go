@@ -302,6 +302,13 @@ func (L *LDAPObjectResource) ModifyPlan(ctx context.Context, request resource.Mo
 			response.Plan.SetAttribute(ctx, path.Root("attributes").AtMapKey(attributeType), stateAttributes[attributeType])
 		}
 	}
+
+	for attributeType := range stateAttributes {
+		if L.isIgnored(ctx, attributeType, planData, response.Diagnostics) {
+			// Re-add attributes to the plan that were ignored and removed to not manage them
+			response.Plan.SetAttribute(ctx, path.Root("attributes").AtMapKey(attributeType), stateAttributes[attributeType])
+		}
+	}
 }
 
 func (L *LDAPObjectResource) addLdapEntry(ctx context.Context, data *LDAPObjectResourceModel, diagnostics *diag.Diagnostics) error {
