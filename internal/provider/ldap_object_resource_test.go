@@ -1,9 +1,11 @@
 package provider
 
 import (
+	"context"
 	"fmt"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"os"
 	"testing"
@@ -38,13 +40,24 @@ func TestLDAPObjectResource(t *testing.T) {
 					resource.TestCheckResourceAttr("ldap_object.test", "attributes.userPassword.0", "password"),
 				),
 			},
-			// Update an ignored attribute which was changed externally
+			// Update an ignored attribute which was changed externally.
 			{
 				Config:    testUpdateIgnoreConfig,
 				PreConfig: testChangePasswordExternally,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("ldap_object.test", "attributes.userPassword.0", "password"),
 				),
+			},
+			// Update DN. Destroy afterwards
+			{
+				Config: testUpdateDN,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ldap_object.test", "dn", "cn=test2,dc=example,dc=com"),
+				),
+			},
+			{
+				Config:  testCreateConfig,
+				Destroy: true,
 			},
 			// Test import
 			{
@@ -67,15 +80,9 @@ func TestLDAPObjectResource(t *testing.T) {
 			{
 				Config:       testImportIgnored,
 				ResourceName: "ldap_object.importtestignore",
-				Check:        resource.TestCheckResourceAttr("ldap_object.importtestignore", "attributes.description.0", "test"),
-			},
-			// Update DN
-			{
-				Config:    testUpdateDN,
-				PreConfig: testChangePasswordExternally,
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("ldap_object.test", "dn", "cn=test2,dc=example,dc=com"),
-				),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{ignorePlanCheck()},
+				},
 			},
 		}},
 	)
@@ -187,7 +194,6 @@ resource "ldap_object" "importtestignore" {
 	attributes = {
 		"cn" = ["importtestignore"]
 		"sn" = ["test"]
-		"description" = ["testchange"]
 	}
 
 	ignore_changes = ["description"]
@@ -229,4 +235,31 @@ func testImportStateCheck(state []*terraform.InstanceState) error {
 		return fmt.Errorf("invalid sn")
 	}
 	return nil
+}
+
+type IgnorePlanCheck struct{}
+
+func (IgnorePlanCheck) CheckPlan(ctx context.Context, request plancheck.CheckPlanRequest, response *plancheck.CheckPlanResponse) {
+	if request.Plan.ResourceChanges[0].Name == "importtestignore" {
+		var bA map[string]interface{}
+		var aA map[string]interface{}
+		if bC, ok := request.Plan.ResourceChanges[0].Change.Before.(map[string]interface{}); ok {
+			if a, ok := bC["attributes"].(map[string]interface{}); ok {
+				bA = a
+			}
+		}
+		if aC, ok := request.Plan.ResourceChanges[0].Change.After.(map[string]interface{}); ok {
+			if a, ok := aC["attributes"].(map[string]interface{}); ok {
+				aA = a
+			}
+		}
+
+		if len(bA) != len(aA) {
+			response.Error = fmt.Errorf("attributes would've been changed")
+		}
+	}
+}
+
+func ignorePlanCheck() plancheck.PlanCheck {
+	return IgnorePlanCheck{}
 }
