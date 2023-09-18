@@ -255,14 +255,14 @@ func (L *LDAPObjectResource) ImportState(ctx context.Context, request resource.I
 			err.Error(),
 		)
 	} else {
+		resource.ImportStatePassthroughID(ctx, path.Root("id"), request, response)
 		ctx = MaskAttributesFromArray(ctx, entry.Attributes)
-		response.State.SetAttribute(ctx, path.Root("dn"), entry.DN)
-		response.State.SetAttribute(ctx, path.Root("id"), entry.DN)
+		response.Diagnostics.Append(response.State.SetAttribute(ctx, path.Root("dn"), entry.DN)...)
 		for _, attribute := range entry.Attributes {
 			if attribute.Name == "objectClass" {
-				response.State.SetAttribute(ctx, path.Root("object_classes"), attribute.Values)
+				response.Diagnostics.Append(response.State.SetAttribute(ctx, path.Root("object_classes"), attribute.Values)...)
 			} else {
-				response.State.SetAttribute(ctx, path.Root("attributes").AtMapKey(attribute.Name), attribute.Values)
+				response.Diagnostics.Append(response.State.SetAttribute(ctx, path.Root("attributes").AtMapKey(attribute.Name), attribute.Values)...)
 			}
 		}
 		tflog.Debug(ctx, "Imported entry", map[string]interface{}{
