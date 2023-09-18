@@ -141,6 +141,7 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	}
 
 	ctx = tflog.MaskLogStrings(ctx, ldapBindPassword)
+
 	loggerAdapter := TFLoggerAdapter{ctx: ctx}
 	logger := log.New(loggerAdapter, "", log.LstdFlags)
 	ldap.Logger(logger)

@@ -1,8 +1,10 @@
 package provider
 
 import (
+	"fmt"
 	"github.com/go-ldap/ldap/v3"
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"os"
 	"testing"
 )
@@ -44,15 +46,28 @@ func TestLDAPObjectResource(t *testing.T) {
 					resource.TestCheckResourceAttr("ldap_object.test", "attributes.userPassword.0", "password"),
 				),
 			},
+			// Test import
 			{
-				Config:        testImport,
-				PreConfig:     testImportPreConfig,
-				ImportState:   true,
-				ImportStateId: "cn=importtest,dc=example,dc=com",
-				ResourceName:  "ldap_object.importtest",
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("ldap_object.importtest", "attributes.sn.0", "test"),
-				),
+				Config:           testImport,
+				PreConfig:        testImportPreConfig,
+				ImportState:      true,
+				ImportStateId:    "cn=importtest,dc=example,dc=com",
+				ImportStateCheck: testImportStateCheck,
+				ResourceName:     "ldap_object.importtest",
+			},
+			// Test that ignored attributes are not imported
+			{
+				Config:             testImportIgnored,
+				PreConfig:          testImportIgnoredPreConfig,
+				ImportState:        true,
+				ImportStatePersist: true,
+				ImportStateId:      "cn=importtestignore,dc=example,dc=com",
+				ResourceName:       "ldap_object.importtestignore",
+			},
+			{
+				Config:       testImportIgnored,
+				ResourceName: "ldap_object.importtestignore",
+				Check:        resource.TestCheckResourceAttr("ldap_object.importtestignore", "attributes.description.0", "test"),
 			},
 			// Update DN
 			{
@@ -60,17 +75,6 @@ func TestLDAPObjectResource(t *testing.T) {
 				PreConfig: testChangePasswordExternally,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("ldap_object.test", "dn", "cn=test2,dc=example,dc=com"),
-				),
-			},
-			// Test import
-			{
-				Config:        testImport,
-				PreConfig:     testImportPreConfig,
-				ImportState:   true,
-				ImportStateId: "cn=importtest,dc=example,dc=com",
-				ResourceName:  "ldap_object.importtest",
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("ldap_object.importtest", "attributes.sn.0", "test"),
 				),
 			},
 		}},
@@ -150,6 +154,8 @@ resource "ldap_object" "test" {
 
 const testImport = `
 resource "ldap_object" "importtest" {
+	dn = "cn=importtest,dc=example,dc=com"
+	object_classes = ["person"]
 }
 `
 
@@ -171,4 +177,56 @@ func testImportPreConfig() {
 			return
 		}
 	}
+}
+
+const testImportIgnored = `
+resource "ldap_object" "importtestignore" {
+	dn = "cn=importtestignore,dc=example,dc=com"
+	object_classes = ["person"]
+
+	attributes = {
+		"cn" = ["importtestignore"]
+		"sn" = ["test"]
+		"description" = ["testchange"]
+	}
+
+	ignore_changes = ["description"]
+}
+`
+
+func testImportIgnoredPreConfig() {
+	ldapUrl := os.Getenv("LDAP_URL")
+	ldapBindDN := os.Getenv("LDAP_BIND_DN")
+	ldapBindPassword := os.Getenv("LDAP_BIND_PASSWORD")
+
+	if conn, err := ldap.DialURL(ldapUrl); err != nil {
+		return
+	} else {
+		if err := conn.Bind(ldapBindDN, ldapBindPassword); err != nil {
+			return
+		}
+		r := ldap.NewAddRequest("cn=importtestignore,dc=example,dc=com", []ldap.Control{})
+		r.Attribute("objectClass", []string{"person"})
+		r.Attribute("sn", []string{"test"})
+		r.Attribute("description", []string{"test"})
+		if err := conn.Add(r); err != nil {
+			return
+		}
+	}
+}
+
+func testImportStateCheck(state []*terraform.InstanceState) error {
+	if state[0].ID != "cn=importtest,dc=example,dc=com" {
+		return fmt.Errorf("wrong ID found")
+	}
+	if state[0].Attributes["object_classes.0"] != "person" {
+		return fmt.Errorf("can not find object class person")
+	}
+	if state[0].Attributes["object_classes.#"] != "1" {
+		return fmt.Errorf("invalid object classes")
+	}
+	if state[0].Attributes["attributes.sn.0"] != "test" {
+		return fmt.Errorf("invalid sn")
+	}
+	return nil
 }
