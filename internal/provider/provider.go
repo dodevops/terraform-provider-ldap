@@ -81,15 +81,8 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	var conn *ldap.Conn
-	conn = GetConn(data, resp.Diagnostics)
-
-	if conn == null {
-		return
-	}
-
-	resp.DataSourceData = conn
-	resp.ResourceData = conn
+	resp.DataSourceData = data
+	resp.ResourceData = data
 }
 
 func (p *LDAPProvider) Resources(_ context.Context) []func() resource.Resource {
