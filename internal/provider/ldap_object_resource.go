@@ -25,7 +25,7 @@ func NewLDAPObjectResource() resource.Resource {
 }
 
 type LDAPObjectResource struct {
-	conn *ldap.Conn
+	data LDAPProviderModel
 }
 
 type LDAPObjectResourceModel struct {
@@ -79,15 +79,15 @@ func (L *LDAPObjectResource) Configure(_ context.Context, request resource.Confi
 		return
 	}
 
-	if conn, ok := request.ProviderData.(*ldap.Conn); !ok {
+	if data, ok := request.ProviderData.(LDAPProviderModel); !ok {
 		response.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *ldap.Conn, got: %T. Please report this issue to the provider developers.", request.ProviderData),
+			fmt.Sprintf("Expected LDAPProviderModel, got: %T. Please report this issue to the provider developers.", request.ProviderData),
 		)
 
 		return
 	} else {
-		L.conn = conn
+		L.data = data
 	}
 }
 
@@ -98,7 +98,13 @@ func (L *LDAPObjectResource) Create(ctx context.Context, request resource.Create
 		return
 	}
 
-	if err := L.addLdapEntry(ctx, data, &response.Diagnostics); err != nil {
+	var conn *ldap.Conn = GetConn(L.data, response.Diagnostics)
+
+	if conn == nil {
+		return
+	}
+
+	if err := L.addLdapEntry(ctx, data, &response.Diagnostics, conn); err != nil {
 		response.Diagnostics.AddError(
 			"Can not add resource",
 			fmt.Sprintf("LDAP server reported: %s", err),
@@ -116,7 +122,13 @@ func (L *LDAPObjectResource) Read(ctx context.Context, request resource.ReadRequ
 		return
 	}
 
-	if entry, err := GetEntry(L.conn, data.DN.ValueString()); err != nil {
+	var conn *ldap.Conn = GetConn(L.data, response.Diagnostics)
+
+	if conn == nil {
+		return
+	}
+
+	if entry, err := GetEntry(conn, data.DN.ValueString()); err != nil {
 		response.Diagnostics.AddError(
 			"Can not read entry",
 			err.Error(),
@@ -143,16 +155,22 @@ func (L *LDAPObjectResource) Update(ctx context.Context, request resource.Update
 		return
 	}
 
+	var conn *ldap.Conn = GetConn(L.data, response.Diagnostics)
+
+	if conn == nil {
+		return
+	}
+
 	// Recreate object if DN changed
 	if stateData.DN.ValueString() != planData.DN.ValueString() {
-		if err := L.conn.Del(ldap.NewDelRequest(stateData.DN.ValueString(), []ldap.Control{})); err != nil {
+		if err := conn.Del(ldap.NewDelRequest(stateData.DN.ValueString(), []ldap.Control{})); err != nil {
 			response.Diagnostics.AddError(
 				"Can not delete old DN entry",
 				fmt.Sprintf("Trying to delete entry of old DN returned: %s", err),
 			)
 			return
 		}
-		if err := L.addLdapEntry(ctx, planData, &response.Diagnostics); err != nil {
+		if err := L.addLdapEntry(ctx, planData, &response.Diagnostics, conn); err != nil {
 			response.Diagnostics.AddError(
 				"Can not add resource",
 				fmt.Sprintf("LDAP server reported: %s", err),
@@ -196,7 +214,7 @@ func (L *LDAPObjectResource) Update(ctx context.Context, request resource.Update
 				r.Add(attributeType, values)
 			}
 		}
-		if err := L.conn.Modify(r); err != nil {
+		if err := conn.Modify(r); err != nil {
 			response.Diagnostics.AddError(
 				"Can not modify entry",
 				fmt.Sprintf("LDAP server reported: %s", err),
@@ -215,7 +233,13 @@ func (L *LDAPObjectResource) Delete(ctx context.Context, request resource.Delete
 		return
 	}
 
-	if err := L.conn.Del(ldap.NewDelRequest(stateData.DN.ValueString(), []ldap.Control{})); err != nil {
+	var conn *ldap.Conn = GetConn(L.data, response.Diagnostics)
+
+	if conn == nil {
+		return
+	}
+
+	if err := conn.Del(ldap.NewDelRequest(stateData.DN.ValueString(), []ldap.Control{})); err != nil {
 		response.Diagnostics.AddError(
 			"Can not delete entry",
 			fmt.Sprintf("Trying to delete entry returned: %s", err),
@@ -225,7 +249,13 @@ func (L *LDAPObjectResource) Delete(ctx context.Context, request resource.Delete
 }
 
 func (L *LDAPObjectResource) ImportState(ctx context.Context, request resource.ImportStateRequest, response *resource.ImportStateResponse) {
-	if entry, err := GetEntry(L.conn, request.ID); err != nil {
+	var conn *ldap.Conn = GetConn(L.data, response.Diagnostics)
+
+	if conn == nil {
+		return
+	}
+
+	if entry, err := GetEntry(conn, request.ID); err != nil {
 		response.Diagnostics.AddError(
 			"Can not read entry",
 			err.Error(),
@@ -276,7 +306,7 @@ func (L *LDAPObjectResource) ModifyPlan(ctx context.Context, request resource.Mo
 	}
 }
 
-func (L *LDAPObjectResource) addLdapEntry(ctx context.Context, data *LDAPObjectResourceModel, diagnostics *diag.Diagnostics) error {
+func (L *LDAPObjectResource) addLdapEntry(ctx context.Context, data *LDAPObjectResourceModel, diagnostics *diag.Diagnostics, conn *ldap.Conn) error {
 	var objectClasses []string
 	diagnostics.Append(data.ObjectClasses.ElementsAs(ctx, &objectClasses, false)...)
 	if diagnostics.HasError() {
@@ -296,7 +326,7 @@ func (L *LDAPObjectResource) addLdapEntry(ctx context.Context, data *LDAPObjectR
 		a.Attribute(attributeType, values)
 	}
 
-	return L.conn.Add(a)
+	return conn.Add(a)
 }
 
 func (L *LDAPObjectResource) isIgnored(ctx context.Context, attributeType string, data *LDAPObjectResourceModel, diagnostics diag.Diagnostics) bool {

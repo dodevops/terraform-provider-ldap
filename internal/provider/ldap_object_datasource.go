@@ -18,7 +18,7 @@ func NewLDAPObjectDataSource() datasource.DataSource {
 }
 
 type LDAPObjectDataSource struct {
-	conn *ldap.Conn
+	data LDAPProviderModel
 }
 
 type LDAPObjectDatasourceModel struct {
@@ -69,15 +69,15 @@ func (L *LDAPObjectDataSource) Configure(_ context.Context, request datasource.C
 		return
 	}
 
-	if conn, ok := request.ProviderData.(*ldap.Conn); !ok {
+	if data, ok := request.ProviderData.(LDAPProviderModel); !ok {
 		response.Diagnostics.AddError(
 			"Unexpected Datasource Configure Type",
-			fmt.Sprintf("Expected *ldap.Conn, got: %T. Please report this issue to the provider developers.", request.ProviderData),
+			fmt.Sprintf("Expected LDAPProviderModel, got: %T. Please report this issue to the provider developers.", request.ProviderData),
 		)
 
 		return
 	} else {
-		L.conn = conn
+		L.data = data
 	}
 }
 
@@ -87,6 +87,11 @@ func (L *LDAPObjectDataSource) Read(ctx context.Context, request datasource.Read
 	var attributes map[string][]string
 	response.Diagnostics.Append(data.Attributes.ElementsAs(ctx, &attributes, false)...)
 	attributes = make(map[string][]string)
+	var conn *ldap.Conn = GetConn(L.data, response.Diagnostics)
+
+	if conn == nil {
+		return
+	}
 
 	var objectClasses []string
 	response.Diagnostics.Append(data.ObjectClasses.ElementsAs(ctx, &objectClasses, false)...)
@@ -100,7 +105,7 @@ func (L *LDAPObjectDataSource) Read(ctx context.Context, request datasource.Read
 	var additionalAttributes []string
 	response.Diagnostics.Append(data.AdditionalAttributes.ElementsAs(ctx, &additionalAttributes, false)...)
 
-	if entry, err := GetEntry(L.conn, data.DN.ValueString(), append(additionalAttributes, "*")...); err != nil {
+	if entry, err := GetEntry(conn, data.DN.ValueString(), append(additionalAttributes, "*")...); err != nil {
 		response.Diagnostics.AddError(
 			"Can not read entry",
 			err.Error(),

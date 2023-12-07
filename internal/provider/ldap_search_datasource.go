@@ -20,7 +20,7 @@ func NewLDAPSearchDataSource() datasource.DataSource {
 }
 
 type LDAPSearchDataSource struct {
-	conn *ldap.Conn
+	data LDAPProviderModel
 }
 
 type LDAPSearchDatasourceModel struct {
@@ -80,15 +80,15 @@ func (L *LDAPSearchDataSource) Configure(_ context.Context, request datasource.C
 		return
 	}
 
-	if conn, ok := request.ProviderData.(*ldap.Conn); !ok {
+	if data, ok := request.ProviderData.(LDAPProviderModel); !ok {
 		response.Diagnostics.AddError(
 			"Unexpected Datasource Configure Type",
-			fmt.Sprintf("Expected *ldap.Conn, got: %T. Please report this issue to the provider developers.", request.ProviderData),
+			fmt.Sprintf("Expected LDAPProviderModel, got: %T. Please report this issue to the provider developers.", request.ProviderData),
 		)
 
 		return
 	} else {
-		L.conn = conn
+		L.data = data
 	}
 }
 
@@ -98,6 +98,11 @@ func (L *LDAPSearchDataSource) Read(ctx context.Context, request datasource.Read
 
 	var additionalAttributes []string
 	response.Diagnostics.Append(data.AdditionalAttributes.ElementsAs(ctx, &additionalAttributes, false)...)
+	var conn *ldap.Conn = GetConn(L.data, response.Diagnostics)
+
+	if conn == nil {
+		return
+	}
 
 	var scope int
 
@@ -126,7 +131,7 @@ func (L *LDAPSearchDataSource) Read(ctx context.Context, request datasource.Read
 
 	s := ldap.NewSearchRequest(data.BaseDN.ValueString(), scope, 0, 0, 0, false, filter, append(additionalAttributes, "*"), []ldap.Control{})
 
-	if result, err := L.conn.Search(s); err != nil {
+	if result, err := conn.Search(s); err != nil {
 		response.Diagnostics.AddError(
 			"Can not read entry",
 			err.Error(),
