@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/go-ldap/ldap/v3"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	"github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -74,6 +75,45 @@ All provider options can be set by the respective environment variables as well.
 }
 
 func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequest, resp *provider.ConfigureResponse) {
+	var data LDAPProviderModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var conn *ldap.Conn
+	conn = GetConn(data, resp.Diagnostics)
+
+	if conn == null {
+		return
+	}
+
+	resp.DataSourceData = conn
+	resp.ResourceData = conn
+}
+
+func (p *LDAPProvider) Resources(_ context.Context) []func() resource.Resource {
+	return []func() resource.Resource{
+		NewLDAPObjectResource,
+	}
+}
+
+func (p *LDAPProvider) DataSources(_ context.Context) []func() datasource.DataSource {
+	return []func() datasource.DataSource{
+		NewLDAPObjectDataSource,
+		NewLDAPSearchDataSource,
+	}
+}
+
+func New(version string) func() provider.Provider {
+	return func() provider.Provider {
+		return &LDAPProvider{
+			version: version,
+		}
+	}
+}
+
+func GetConn(data LDAPProviderModel, diagnostics diag.Diagnostics) *ldap.Conn {
 	ldapUrl := os.Getenv("LDAP_URL")
 	ldapBindDN := os.Getenv("LDAP_BIND_DN")
 	ldapBindPassword := os.Getenv("LDAP_BIND_PASSWORD")
@@ -85,12 +125,6 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	ldapTLSUseStartTLS := false
 	if v := os.Getenv("LDAP_TLS_USE_STARTTLS"); v != "" {
 		ldapTLSUseStartTLS = strings.ToUpper(v) == "TRUE"
-	}
-
-	var data LDAPProviderModel
-	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
-	if resp.Diagnostics.HasError() {
-		return
 	}
 
 	if data.LDAPURL.ValueString() != "" {
@@ -114,27 +148,27 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	}
 
 	if ldapUrl == "" {
-		resp.Diagnostics.AddError(
+		diagnostics.AddError(
 			"No LDAP url specified",
 			"Configure the ldap_url attribute or LDAP_URL environment variable for the provider",
 		)
-		return
+		return nil
 	}
 
 	if ldapBindDN == "" {
-		resp.Diagnostics.AddError(
+		diagnostics.AddError(
 			"No LDAP bind dn specified",
 			"Configure the ldap_bind_dn attribute or LDAP_BIND_DN environment variable for the provider",
 		)
-		return
+		return nil
 	}
 
 	if ldapBindPassword == "" {
-		resp.Diagnostics.AddError(
+		diagnostics.AddError(
 			"No LDAP bind password specified",
 			"Configure the ldap_bind_password attribute or LDAP_BIND_PASSWORD environment variable for the provider",
 		)
-		return
+		return nil
 	}
 
 	var o []ldap.DialOpt
@@ -144,11 +178,11 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	}
 
 	if conn, err := ldap.DialURL(ldapUrl, o...); err != nil {
-		resp.Diagnostics.AddError(
+		diagnostics.AddError(
 			"Can't connect to LDAP server",
 			fmt.Sprintf("Error connecting to LDAP server: %s", err),
 		)
-		return
+		return nil
 	} else {
 		if ldapTLSUseStartTLS {
 			c := tls.Config{}
@@ -156,42 +190,20 @@ func (p *LDAPProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 				c.InsecureSkipVerify = true
 			}
 			if err := conn.StartTLS(&c); err != nil {
-				resp.Diagnostics.AddError(
+				diagnostics.AddError(
 					"Can't start TLS",
 					fmt.Sprintf("Error starting TLS: %s", err),
 				)
-				return
+				return nil
 			}
 		}
 		if err := conn.Bind(ldapBindDN, ldapBindPassword); err != nil {
-			resp.Diagnostics.AddError(
+			diagnostics.AddError(
 				"Can't bind to LDAP server",
 				fmt.Sprintf("Error binding to LDAP server: %s", err),
 			)
-			return
+			return nil
 		}
-		resp.DataSourceData = conn
-		resp.ResourceData = conn
-	}
-}
-
-func (p *LDAPProvider) Resources(_ context.Context) []func() resource.Resource {
-	return []func() resource.Resource{
-		NewLDAPObjectResource,
-	}
-}
-
-func (p *LDAPProvider) DataSources(_ context.Context) []func() datasource.DataSource {
-	return []func() datasource.DataSource{
-		NewLDAPObjectDataSource,
-		NewLDAPSearchDataSource,
-	}
-}
-
-func New(version string) func() provider.Provider {
-	return func() provider.Provider {
-		return &LDAPProvider{
-			version: version,
-		}
+		return conn
 	}
 }
