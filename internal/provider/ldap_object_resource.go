@@ -169,11 +169,28 @@ func (L *LDAPObjectResource) Update(ctx context.Context, request resource.Update
 			return
 		}
 	} else {
+		r := ldap.NewModifyRequest(planData.DN.ValueString(), []ldap.Control{})
+
+		var stateObjectClasses []string
+		response.Diagnostics.Append(stateData.ObjectClasses.ElementsAs(ctx, &stateObjectClasses, false)...)
+		var planObjectClasses []string
+		response.Diagnostics.Append(planData.ObjectClasses.ElementsAs(ctx, &planObjectClasses, false)...)
+
+		var classesToAdd []string
+		for _, class := range planObjectClasses {
+			if funk.IndexOf(stateObjectClasses, class) == -1 {
+				classesToAdd = append(classesToAdd, class)
+			}
+		}
+
+		if len(classesToAdd) > 0 {
+			r.Add("objectClass", classesToAdd)
+		}
+
 		var stateAttributes map[string][]string
 		response.Diagnostics.Append(stateData.Attributes.ElementsAs(ctx, &stateAttributes, false)...)
 		var planAttributes map[string][]string
 		response.Diagnostics.Append(planData.Attributes.ElementsAs(ctx, &planAttributes, false)...)
-		r := ldap.NewModifyRequest(planData.DN.ValueString(), []ldap.Control{})
 
 		ctx = MaskAttributes(ctx, stateAttributes)
 		for attributeType, stateValues := range stateAttributes {

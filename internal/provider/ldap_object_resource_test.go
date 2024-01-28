@@ -33,6 +33,14 @@ func TestLDAPObjectResource(t *testing.T) {
 					resource.TestCheckResourceAttr("ldap_object.test", "attributes.sn.0", "test2"),
 				),
 			},
+			// Update object class
+			{
+				Config: testUpdateObjectClassConfig,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ldap_object.test", "object_classes.0", "person"),
+					resource.TestCheckResourceAttr("ldap_object.test", "object_classes.1", "uidObject"),
+				),
+			},
 			// Update an ignored attribute
 			{
 				Config: testUpdateIgnoreConfig,
@@ -59,6 +67,15 @@ func TestLDAPObjectResource(t *testing.T) {
 				Config:  testCreateConfig,
 				Destroy: true,
 			},
+		}},
+	)
+}
+
+func TestImport(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { testAccPreCheck(t) },
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
 			// Test import
 			{
 				Config:           testImport,
@@ -84,8 +101,8 @@ func TestLDAPObjectResource(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{ignorePlanCheck()},
 				},
 			},
-		}},
-	)
+		},
+	})
 }
 
 func testChangePasswordExternally() {
@@ -133,14 +150,29 @@ resource "ldap_object" "test" {
 }
 `
 
+const testUpdateObjectClassConfig = `
+resource "ldap_object" "test" {
+	dn = "cn=test,dc=example,dc=com"
+	object_classes = ["person", "uidObject"]
+	attributes = {
+		"cn" = ["test"]
+		"sn" = ["test2"]
+		"userPassword" = ["password"]
+		"uid" = ["test"]
+	}
+	ignore_changes = ["userPassword"]
+}
+`
+
 const testUpdateIgnoreConfig = `
 resource "ldap_object" "test" {
 	dn = "cn=test,dc=example,dc=com"
-	object_classes = ["person"]
+	object_classes = ["person", "uidObject"]
 	attributes = {
 		"cn" = ["test"]
 		"sn" = ["test2"]
 		"userPassword" = ["password2"]
+		"uid" = ["test"]
 	}
 	ignore_changes = ["userPassword"]
 }
@@ -149,11 +181,12 @@ resource "ldap_object" "test" {
 const testUpdateDN = `
 resource "ldap_object" "test" {
 	dn = "cn=test2,dc=example,dc=com"
-	object_classes = ["person"]
+	object_classes = ["person", "uidObject"]
 	attributes = {
 		"cn" = ["test2"]
 		"sn" = ["test2"]
 		"userPassword" = ["password"]
+		"uid" = ["test"]
 	}
 	ignore_changes = ["userPassword"]
 }
