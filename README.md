@@ -1,5 +1,9 @@
 # Terraform LDAP provider
 
+*THIS REPOSITORY IS ARCHIVED*
+
+We're sorry, but we will discontinue this provider. If you'd like to take it further and support it, we're open to adoptions. Thanks!
+
 Terraform provider to manage and read entries in an LDAP directory.
 
 Inspired by [elastic-infra/ldap](https://registry.terraform.io/providers/elastic-infra/ldap/latest), but updated to
